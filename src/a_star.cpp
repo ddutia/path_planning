@@ -7,7 +7,7 @@
 using namespace std;
 
 #define INF (unsigned)!((int)0)
-#define DEBUG true
+#define DEBUG false
 
 
 struct node {
@@ -15,8 +15,11 @@ struct node {
     double totalCost, heuristicCost, gridCost;
     pair<int, int> parentLocation;
     void calculateHeuristicCost(pair<int, int> endPixel) {
+        //Euclidean distance
         heuristicCost = (double) sqrt( ((endPixel.first-location.first)*(endPixel.first-location.first))
                          +  ((endPixel.second-location.second)*(endPixel.second-location.second)) );
+        //Manhattan distance
+        // heuristicCost = fabs(endPixel.first - location.first) + fabs(endPixel.second - location.second);
     }
 };
 
@@ -38,6 +41,10 @@ vector<pair<int, int>> getAllValidIndices(int MAX_ROW, int MAX_COL, pair<int, in
         for(auto col=columns.begin(); col!=columns.end(); col++) {
             if((*row==currentPixel.first) && (*col==currentPixel.second))
                 continue;
+            //Uncomment the if for 4 neighbours
+            // if((*row!=currentPixel.first) && (*col!=currentPixel.second))
+            //     continue;
+            //check for validity
             if(checkIfIndexInvalid(MAX_ROW, MAX_COL, make_pair(*row,*col)))
                 continue;
             neighbours.push_back(make_pair(*row,*col));
@@ -46,9 +53,9 @@ vector<pair<int, int>> getAllValidIndices(int MAX_ROW, int MAX_COL, pair<int, in
     return neighbours;
 }
 
-vector<pair<int, int>> findNeighbours(cv::Mat inputImageGrid, pair<int, int> currentPixel) {
-    int MAX_ROW = inputImageGrid.rows;
-    int MAX_COL = inputImageGrid.cols;
+vector<pair<int, int>> findNeighbours(cv::Mat image, pair<int, int> currentPixel) {
+    int MAX_ROW = image.cols;
+    int MAX_COL = image.rows;
     vector<pair<int, int>> neighbours = getAllValidIndices(MAX_ROW, MAX_COL,currentPixel), validNeighbours;
     
     if(DEBUG){
@@ -57,10 +64,22 @@ vector<pair<int, int>> findNeighbours(cv::Mat inputImageGrid, pair<int, int> cur
     
     for(uint i=0; i<neighbours.size(); i++){  
         if(DEBUG){ cout<<'('<<neighbours[i].first<<','<<neighbours[i].second<<')'<<' '; }          
-        cv::Vec3b color = inputImageGrid.at<cv::Vec3b>(neighbours[i].second, neighbours[i].first);
+        //check for collision on itself and its neighbours too
+        cv::Vec3b color = image.at<cv::Vec3b>(neighbours[i].second, neighbours[i].first);
         if(color[0]==0 && color[1]==0 && color[2]==0){
-            validNeighbours.push_back(neighbours[i]);
-        }              
+            vector<pair<int, int>> nNeighbours = getAllValidIndices(MAX_ROW, MAX_COL,neighbours[i]);
+            bool flag = true;
+            for(uint j=0; j<nNeighbours.size(); j++){ 
+                cv::Vec3b ncolor = image.at<cv::Vec3b>(nNeighbours[i].second, nNeighbours[i].first);
+                if(ncolor[0]!=0 || ncolor[1]!=0 || ncolor[2]!=0){
+                    flag = false;
+                    break;
+                }
+            }
+            if(flag){
+                validNeighbours.push_back(neighbours[i]);
+            }              
+        }
     }
 
     if(DEBUG){
@@ -69,7 +88,23 @@ vector<pair<int, int>> findNeighbours(cv::Mat inputImageGrid, pair<int, int> cur
     return validNeighbours;
 }
 
-vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startPixel, pair<int, int> endPixel) {
+vector<pair<int, int>> aStarSearch(cv::Mat image, pair<int, int> startPixel, pair<int, int> endPixel) {
+    //check if start and end are accessible
+    cv::Vec3b scolor = image.at<cv::Vec3b>(startPixel.second, startPixel.first);
+    cv::Vec3b ecolor = image.at<cv::Vec3b>(endPixel.second, endPixel.first);
+    if(scolor[0]!=0 || scolor[1]!=0 || scolor[2]!=0 ||
+       ecolor[0]!=0 || ecolor[1]!=0 || ecolor[2]!=0){
+        printf("ERROR: Invalid start or end pixel value, planning is not possible. Returning. . .\n");
+        return(vector<pair<int, int>> {0});
+    }
+
+    //check if start and end are valid
+    if(checkIfIndexInvalid(image.cols, image.rows, startPixel) ||
+       checkIfIndexInvalid(image.cols, image.rows, endPixel)){
+        printf("ERROR: Out of bounds start or end pixel, planning is not possible. Returning. . .\n");
+        return(vector<pair<int, int>> {0});
+    }
+
     bool isEndReached = false;
 
     node startNode, endNode;
@@ -93,10 +128,13 @@ vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startP
             }
         }
         expandedNodesList.erase(minimumCostNodeItr);
-        visitedNodesList.push_back(minimumCostNode);
+        
+        if(DEBUG){
+            printf("********************************************************************************\n");
+            printf("ParentNode: %d,%d TCost %f\n",minimumCostNode.location.first,minimumCostNode.location.second, minimumCostNode.totalCost);
+        }
 
-
-        vector<pair<int, int>> neighboursLocationList = findNeighbours(inputImageGrid, minimumCostNode.location);
+        vector<pair<int, int>> neighboursLocationList = findNeighbours(image, minimumCostNode.location);
 
         //neighbour to node, parent is the mimnumcostnode
         for(auto neighbour=neighboursLocationList.begin(); neighbour!=neighboursLocationList.end(); neighbour++) {
@@ -107,6 +145,9 @@ vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startP
             currentNeighbour.totalCost = currentNeighbour.heuristicCost + currentNeighbour.gridCost;
             currentNeighbour.parentLocation = minimumCostNode.location;
             
+            if(DEBUG){
+            printf("Current neighbour: %d,%d TCost %f \n",currentNeighbour.location.first,currentNeighbour.location.second, currentNeighbour.totalCost);
+            }
 
             auto duplicateInExpandedNodes = find_if(expandedNodesList.begin(), expandedNodesList.end(), [neighbour](node& arg)
                     { return ((arg.location.first == neighbour->first) && (arg.location.second == neighbour->second)); });
@@ -114,7 +155,10 @@ vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startP
                 if (duplicateInExpandedNodes->totalCost <= currentNeighbour.totalCost) {
                     if(DEBUG){printf("Current neighbour already inexpanded nodes list, discarding \n");}
                     continue; 
-                }            
+                }
+                else {
+                    expandedNodesList.erase(duplicateInExpandedNodes);
+                }                
             }
 
             auto duplicateInVisitedNodes = find_if(visitedNodesList.begin(), visitedNodesList.end(), [neighbour](node& arg)
@@ -124,6 +168,9 @@ vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startP
                     if(DEBUG){printf("Current neighbour already in visited nodes list, discarding \n");}
                     continue;
                 }
+                else {
+                    visitedNodesList.erase(duplicateInVisitedNodes);
+                } 
             }
 
             if(DEBUG){printf("Added current neighbour in expanded nodes list! \n");}
@@ -139,6 +186,7 @@ vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startP
                 break;
             }
         }
+        visitedNodesList.push_back(minimumCostNode);
 
         if(isEndReached){
             break;
