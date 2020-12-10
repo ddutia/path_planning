@@ -2,10 +2,7 @@
 * A-star Search Algorithm
 *
 */
-#include<bits/stdc++.h> 
-#include <math.h> 
-#include <iostream>
-#include <vector>
+#include "a_star.h"
 
 using namespace std;
 
@@ -49,9 +46,9 @@ vector<pair<int, int>> getAllValidIndices(int MAX_ROW, int MAX_COL, pair<int, in
     return neighbours;
 }
 
-vector<pair<int, int>> findNeighbours(vector<vector<int>> inputImageGrid, pair<int, int> currentPixel) {
-    int MAX_ROW = 10;
-    int MAX_COL = 9;
+vector<pair<int, int>> findNeighbours(cv::Mat inputImageGrid, pair<int, int> currentPixel) {
+    int MAX_ROW = inputImageGrid.rows;
+    int MAX_COL = inputImageGrid.cols;
     vector<pair<int, int>> neighbours = getAllValidIndices(MAX_ROW, MAX_COL,currentPixel), validNeighbours;
     
     if(DEBUG){
@@ -60,8 +57,8 @@ vector<pair<int, int>> findNeighbours(vector<vector<int>> inputImageGrid, pair<i
     
     for(uint i=0; i<neighbours.size(); i++){  
         if(DEBUG){ cout<<'('<<neighbours[i].first<<','<<neighbours[i].second<<')'<<' '; }          
-        //check for collision on itself and its neighbours too
-        if(inputImageGrid[neighbours[i].first][neighbours[i].second]>0){
+        cv::Vec3b color = inputImageGrid.at<cv::Vec3b>(neighbours[i].second, neighbours[i].first);
+        if(color[0]==0 && color[1]==0 && color[2]==0){
             validNeighbours.push_back(neighbours[i]);
         }              
     }
@@ -72,7 +69,7 @@ vector<pair<int, int>> findNeighbours(vector<vector<int>> inputImageGrid, pair<i
     return validNeighbours;
 }
 
-vector<pair<int, int>> aStarSearch(vector<vector<int>> inputImageGrid, pair<int, int> startPixel, pair<int, int> endPixel) {
+vector<pair<int, int>> aStarSearch(cv::Mat inputImageGrid, pair<int, int> startPixel, pair<int, int> endPixel) {
     bool isEndReached = false;
 
     node startNode, endNode;
@@ -168,7 +165,7 @@ vector<pair<int, int>> aStarSearch(vector<vector<int>> inputImageGrid, pair<int,
 
 
 
-/* Standalone Test Program */
+/* Standalone Test Program *
 int main() 
 { 
     //0--> The cell is not blocked 
@@ -198,4 +195,4 @@ int main()
 
     return(0); 
 }
-/**/
+**/
